@@ -17,6 +17,7 @@ int syscall_counter = 0;
 struct spinlock pid_lock;
 
 extern void forkret(void);
+extern int get_freePages();
 static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
@@ -701,6 +702,7 @@ int print_info(int n) {
 	}
 	else if(n == 2) {
 		// return the number of free memory pages
+		return get_freePages();
 		
 	}
 	return -1;
