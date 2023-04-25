@@ -113,14 +113,20 @@ allocproc(void)
 {
 	struct proc *p;
 
+	
+
 	for(p = proc; p < &proc[NPROC]; p++) {
 		acquire(&p->lock);
+		p->syscall_count = 0;
 		if(p->state == UNUSED) {
 			goto found;
 		} else {
 			release(&p->lock);
 		}
 	}
+
+	// p->syscall_count = 0; // Initialize syscall_count to 0
+
 	return 0;
 
 found:
@@ -685,7 +691,7 @@ procdump(void)
 }
 
 //lab1 part1
-int print_info(int n) {
+int get_sysinfo(int n) {
 	struct proc *p;
 	if(n == 0) {
 		// return the total number of active processes
@@ -706,4 +712,21 @@ int print_info(int n) {
 		
 	}
 	return -1;
+}
+
+// lab1 part2
+int update_procinfo(struct pinfo* in){
+
+	if(in == 0) return -1;
+
+	struct proc *curproc = myproc();
+
+	struct pinfo out;
+    out.ppid = curproc->parent->pid;
+    out.syscall_count = curproc->syscall_count; 
+    out.page_usage = (PGROUNDUP(curproc->sz)) / PGSIZE;
+
+    if (copyout(curproc->pagetable, (uint64)in, (char *)&out, sizeof(out)) < 0) return -1;
+
+	return 0;
 }

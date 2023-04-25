@@ -91,10 +91,18 @@ sys_uptime(void)
 }
 
 uint64
-sys_info(void)
+sys_sysinfo(void)
 {
   int p;
   argint(0, &p);
-  int res = print_info(p);
+  int res = get_sysinfo(p);
   return res;
+}
+
+uint64
+sys_procinfo(void)
+{
+  uint64 p;
+  argaddr(0, &p);
+  return update_procinfo((struct pinfo*)p);
 }

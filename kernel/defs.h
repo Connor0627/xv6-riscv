@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct pinfo;
 
 // bio.c
 void            binit(void);
@@ -106,7 +107,8 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
-int             print_info(int);
+int             get_sysinfo(int);
+int             update_procinfo(struct pinfo*);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
