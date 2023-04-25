@@ -689,7 +689,8 @@ int print_info(int n) {
 		// return the total number of active processes
 		int num = 0;
 		for(p = proc; p < &proc[NPROC]; p++) {
-			num++;
+			if(p->state != UNUSED)
+				num++;
 		}
 		return num;
 	}
