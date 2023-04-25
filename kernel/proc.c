@@ -13,6 +13,7 @@ struct proc proc[NPROC];
 struct proc *initproc;
 
 int nextpid = 1;
+int syscall_counter = 0;
 struct spinlock pid_lock;
 
 extern void forkret(void);
@@ -696,7 +697,7 @@ int print_info(int n) {
 	}
 	else if(n == 1) {
 		// return the total number of system calls
-		
+		return syscall_counter - 1;
 	}
 	else if(n == 2) {
 		// return the number of free memory pages
