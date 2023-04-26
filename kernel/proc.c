@@ -717,15 +717,20 @@ int get_sysinfo(int n) {
 // lab1 part2
 int update_procinfo(struct pinfo* in){
 
+	// return -1 if null input pointer
 	if(in == 0) return -1;
 
 	struct proc *curproc = myproc();
 
+	// create a new output pinfo for updaing input pointer
 	struct pinfo out;
+
+	// assigning the fields of out with info
     out.ppid = curproc->parent->pid;
     out.syscall_count = curproc->syscall_count; 
     out.page_usage = (PGROUNDUP(curproc->sz)) / PGSIZE;
 
+	// if fail to copy results back, return -1
     if (copyout(curproc->pagetable, (uint64)in, (char *)&out, sizeof(out)) < 0) return -1;
 
 	return 0;
