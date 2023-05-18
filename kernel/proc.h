@@ -94,7 +94,8 @@ struct proc {
   int syscall_count;
   int tickets;                 // the ticket value
   int ticks;                   // number of times it has been scheduled to run
-
+  int stride;                  
+  int pass;                    // the length strided by the proc
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 

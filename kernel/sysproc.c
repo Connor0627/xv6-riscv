@@ -119,6 +119,6 @@ sys_sched_tickets(void)
 {
   int n;
   argint(0, &n);
-  update_sched_tickets(n);
+  set_sched_tickets(n);
   return 0;
 }

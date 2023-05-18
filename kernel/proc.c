@@ -15,6 +15,7 @@ struct proc *initproc;
 int nextpid = 1;
 int syscall_counter = 0;
 struct spinlock pid_lock;
+int stride1 = 10000;
 
 extern void forkret(void);
 extern int get_freePages();
@@ -113,7 +114,7 @@ allocproc(void)
 {
 	struct proc *p;
 
-	
+
 
 	for(p = proc; p < &proc[NPROC]; p++) {
 		acquire(&p->lock);
@@ -132,8 +133,10 @@ allocproc(void)
 found:
 	p->pid = allocpid();
 	p->state = USED;
-	p->tickets = 10000;
+	p->tickets = stride1;
 	p->ticks = 0;
+	p->stride = stride1;
+	p->pass = 0;
 	// Allocate a trapframe page.
 	if((p->trapframe = (struct trapframe *)kalloc()) == 0){
 		freeproc(p);
@@ -178,8 +181,10 @@ freeproc(struct proc *p)
 	p->killed = 0;
 	p->xstate = 0;
 	p->state = UNUSED;
-	p->tickets = 10000;
+	p->tickets = stride1;
 	p->ticks = 0;
+	p->pass = 0;
+	p->stride = stride1;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -450,8 +455,8 @@ unsigned short bit;
 
 unsigned short rand()
 {
-  bit = ((lfsr >> 0) ^ (lfsr >> 2) ^ (lfsr >> 3) ^ (lfsr >> 5)) & 1;
-  return lfsr = (lfsr >> 1) | (bit << 15);
+	bit = ((lfsr >> 0) ^ (lfsr >> 2) ^ (lfsr >> 3) ^ (lfsr >> 5)) & 1;
+	return lfsr = (lfsr >> 1) | (bit << 15);
 }
 
 
@@ -474,41 +479,62 @@ scheduler(void)
 		intr_on();
 
 #if defined(LOTTERY)
-    int sum_tickets = 0;
-    for (p = proc; p < &proc[NPROC]; p++)
-    {
-      acquire(&p->lock);
-      if (p->state == RUNNABLE)
-      {
-        sum_tickets += p->tickets;
-      }
-      release(&p->lock);
-    }
-    int lottery = rand() % sum_tickets;
-    int tickets_pointer = 0;
-    for (p = proc; p < &proc[NPROC]; p++)
-    {
-      acquire(&p->lock);
-      if (p->state == RUNNABLE) {
-        tickets_pointer += p->tickets;
-        if (tickets_pointer >= lottery) {
-			p->state = RUNNING;
-			++(p->ticks);
-			c->proc = p;
-			swtch(&c->context, &p->context);
+		int sum_tickets = 0;
+		for (p = proc; p < &proc[NPROC]; p++)
+		{
+			acquire(&p->lock);
+			if (p->state == RUNNABLE)
+			{
+				sum_tickets += p->tickets;
+			}
+			release(&p->lock);
+		}
+		int lottery = rand() % sum_tickets;
+		int tickets_pointer = 0;
+		for (p = proc; p < &proc[NPROC]; p++)
+		{
+			acquire(&p->lock);
+			if (p->state == RUNNABLE) {
+				tickets_pointer += p->tickets;
+				if (tickets_pointer >= lottery) {
+					p->state = RUNNING;
+					++(p->ticks);
+					c->proc = p;
+					swtch(&c->context, &p->context);
+					c->proc = 0;
+					release(&p->lock);
+					break;
+				}
+				else {
+					release(&p->lock);
+					continue;
+				}
+			}
+			release(&p->lock);
+		}
+#elif defined(STRIDE)
+		int min_pass = __INT_MAX__;
+		struct proc *last_proc =  0;
+		for (p = proc; p < &proc[NPROC]; p++) {
+			acquire(&p->lock);
+			if (p->state == RUNNABLE) {
+				if (min_pass > p->pass) {
+					min_pass = p->pass;
+					last_proc = p;
+				}
+			}
+			release(&p->lock);
+		}
+		if (last_proc != 0) {
+			acquire(&p->lock);
+			last_proc->state = RUNNING;
+			last_proc->pass += last_proc->stride;
+			++(last_proc->ticks);
+			c->proc = last_proc;
+			swtch(&c->context, &last_proc->context);
 			c->proc = 0;
 			release(&p->lock);
-			break;
-        }
-        else {
-			release(&p->lock);
-			continue;
-        }
-      }
-      release(&p->lock);
-      // break;
-    }
-#elif defined(STRIDE)
+		}
 
 #else
 		for(p = proc; p < &proc[NPROC]; p++) {
@@ -743,7 +769,7 @@ procdump(void)
 }
 
 //lab1 part1
-	int
+int
 get_sysinfo(int n) {
 	struct proc *p;
 	if(n == 0) {
@@ -762,13 +788,13 @@ get_sysinfo(int n) {
 	else if(n == 2) {
 		// return the number of free memory pages
 		return get_freePages();
-		
+
 	}
 	return -1;
 }
 
 // lab1 part2
-	int
+int
 update_procinfo(struct pinfo* in){
 
 	// return -1 if null input pointer
@@ -780,43 +806,41 @@ update_procinfo(struct pinfo* in){
 	struct pinfo out;
 
 	// assigning the fields of out with info
-    out.ppid = curproc->parent->pid;
-    out.syscall_count = curproc->syscall_count; 
-    out.page_usage = (PGROUNDUP(curproc->sz)) / PGSIZE;
+	out.ppid = curproc->parent->pid;
+	out.syscall_count = curproc->syscall_count; 
+	out.page_usage = (PGROUNDUP(curproc->sz)) / PGSIZE;
 
 	// if fail to copy results back, return -1
-    if (copyout(curproc->pagetable, (uint64)in, (char *)&out, sizeof(out)) < 0) return -1;
+	if (copyout(curproc->pagetable, (uint64)in, (char *)&out, sizeof(out)) < 0) return -1;
 
 	return 0;
 }
 	void
 print_sched_statistics(void)
 {
-  struct proc *p;
-  for (p = proc; p < &proc[NPROC]; p++)
-  {
-	if (p->state == UNUSED)
-		continue;
-	printf("%d(%s): tickets: %d, ticks: %d\n", p->pid, p->name, p->tickets, p->ticks);
-  }
+	struct proc *p;
+	for (p = proc; p < &proc[NPROC]; p++) {
+		if (p->state != UNUSED)
+			printf("%d(%s): tickets: %d, ticks: %d\n", p->pid, p->name, p->tickets, p->ticks);
+	}
 
-  // printf("system call sched_statistics!");
-  return;
+	// printf("system call sched_statistics!");
+	return;
 }
 	void
-update_sched_tickets(int n)
+set_sched_tickets(int t)
 {
 
-  if (n > 10000)
-  {
-    printf("the number of tickets cannot exceed 10000!");
-    return;
-  }
+	if (t > stride1) {
+		printf("the number of tickets cannot exceed %d!", stride1);
+		return;
+	}
 
-  struct proc *curproc = myproc();
+	struct proc *curproc = myproc();
 
-  curproc->tickets = n;
-
-  // printf("\nsystem call sched_tickets %d!\n", n);
-  return;
+	curproc->tickets = t;
+	curproc->stride = stride1 / t;
+	curproc->pass = t;
+	// printf("\nsystem call sched_tickets %d!\n", n);
+	return;
 }
