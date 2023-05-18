@@ -133,8 +133,10 @@ allocproc(void)
 found:
 	p->pid = allocpid();
 	p->state = USED;
-	p->tickets = 10000;
+	p->tickets = stride1;
 	p->ticks = 0;
+	p->stride = 10;
+	p->pass = 0;
 	if((p->trapframe = (struct trapframe *)kalloc()) == 0){
 		freeproc(p);
 		release(&p->lock);
