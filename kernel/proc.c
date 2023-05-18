@@ -476,14 +476,8 @@ scheduler(void)
 #if defined(LOTTERY)
 		int sum_tickets = 0;
 		for (p = proc; p < &proc[NPROC]; p++)
-		{
-			acquire(&p->lock);
 			if (p->state == RUNNABLE)
-			{
 				sum_tickets += p->tickets;
-			}
-			release(&p->lock);
-		}
 		int lottery = rand() % sum_tickets;
 		int tickets_pointer = 0;
 		for (p = proc; p < &proc[NPROC]; p++)
