@@ -526,14 +526,14 @@ scheduler(void)
 			release(&p->lock);
 		}
 		if (last_proc != 0) {
-			acquire(&p->lock);
+			acquire(&last_proc->lock);
 			last_proc->state = RUNNING;
 			last_proc->pass += last_proc->stride;
 			++(last_proc->ticks);
 			c->proc = last_proc;
 			swtch(&c->context, &last_proc->context);
 			c->proc = 0;
-			release(&p->lock);
+			release(&last_proc->lock);
 		}
 
 #else
