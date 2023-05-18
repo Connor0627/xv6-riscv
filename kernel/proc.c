@@ -132,7 +132,8 @@ allocproc(void)
 found:
 	p->pid = allocpid();
 	p->state = USED;
-
+	p->tickets = 10000;
+	p->ticks = 0;
 	// Allocate a trapframe page.
 	if((p->trapframe = (struct trapframe *)kalloc()) == 0){
 		freeproc(p);
@@ -177,6 +178,8 @@ freeproc(struct proc *p)
 	p->killed = 0;
 	p->xstate = 0;
 	p->state = UNUSED;
+	p->tickets = 10000;
+	p->ticks = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -442,6 +445,16 @@ wait(uint64 addr)
 	}
 }
 
+unsigned short lfsr = 0xACE1u;
+unsigned short bit;
+
+unsigned short rand()
+{
+  bit = ((lfsr >> 0) ^ (lfsr >> 2) ^ (lfsr >> 3) ^ (lfsr >> 5)) & 1;
+  return lfsr = (lfsr >> 1) | (bit << 15);
+}
+
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -460,6 +473,44 @@ scheduler(void)
 		// Avoid deadlock by ensuring that devices can interrupt.
 		intr_on();
 
+#if defined(LOTTERY)
+    int sum_tickets = 0;
+    for (p = proc; p < &proc[NPROC]; p++)
+    {
+      acquire(&p->lock);
+      if (p->state == RUNNABLE)
+      {
+        sum_tickets += p->tickets;
+      }
+      release(&p->lock);
+    }
+    int lottery = rand() % sum_tickets;
+    int tickets_pointer = 0;
+    for (p = proc; p < &proc[NPROC]; p++)
+    {
+      acquire(&p->lock);
+      if (p->state == RUNNABLE) {
+        tickets_pointer += p->tickets;
+        if (tickets_pointer >= lottery) {
+			p->state = RUNNING;
+			++(p->ticks);
+			c->proc = p;
+			swtch(&c->context, &p->context);
+			c->proc = 0;
+			release(&p->lock);
+			break;
+        }
+        else {
+			release(&p->lock);
+			continue;
+        }
+      }
+      release(&p->lock);
+      // break;
+    }
+#elif defined(STRIDE)
+
+#else
 		for(p = proc; p < &proc[NPROC]; p++) {
 			acquire(&p->lock);
 			if(p->state == RUNNABLE) {
@@ -476,6 +527,7 @@ scheduler(void)
 			}
 			release(&p->lock);
 		}
+#endif
 	}
 }
 
@@ -691,7 +743,8 @@ procdump(void)
 }
 
 //lab1 part1
-int get_sysinfo(int n) {
+	int
+get_sysinfo(int n) {
 	struct proc *p;
 	if(n == 0) {
 		// return the total number of active processes
@@ -715,7 +768,8 @@ int get_sysinfo(int n) {
 }
 
 // lab1 part2
-int update_procinfo(struct pinfo* in){
+	int
+update_procinfo(struct pinfo* in){
 
 	// return -1 if null input pointer
 	if(in == 0) return -1;
@@ -734,4 +788,35 @@ int update_procinfo(struct pinfo* in){
     if (copyout(curproc->pagetable, (uint64)in, (char *)&out, sizeof(out)) < 0) return -1;
 
 	return 0;
+}
+	void
+print_sched_statistics(void)
+{
+  struct proc *p;
+  for (p = proc; p < &proc[NPROC]; p++)
+  {
+	if (p->state == UNUSED)
+		continue;
+	printf("%d(%s): tickets: %d, ticks: %d\n", p->pid, p->name, p->tickets, p->ticks);
+  }
+
+  // printf("system call sched_statistics!");
+  return;
+}
+	void
+update_sched_tickets(int n)
+{
+
+  if (n > 10000)
+  {
+    printf("the number of tickets cannot exceed 10000!");
+    return;
+  }
+
+  struct proc *curproc = myproc();
+
+  curproc->tickets = n;
+
+  // printf("\nsystem call sched_tickets %d!\n", n);
+  return;
 }

@@ -109,6 +109,8 @@ int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 int             get_sysinfo(int);
 int             update_procinfo(struct pinfo*);
+void		    print_sched_statistics(void);
+void		    update_sched_tickets(int);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
