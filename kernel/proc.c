@@ -489,18 +489,14 @@ scheduler(void)
 			acquire(&p->lock);
 			if (p->state == RUNNABLE) {
 				tickets_pointer += p->tickets;
-				if (tickets_pointer >= lottery) {
+				if (tickets_pointer > lottery) {
 					p->state = RUNNING;
-					++(p->ticks);
+					p->ticks++;
 					c->proc = p;
 					swtch(&c->context, &p->context);
 					c->proc = 0;
 					release(&p->lock);
 					break;
-				}
-				else {
-					release(&p->lock);
-					continue;
 				}
 			}
 			release(&p->lock);
@@ -824,8 +820,8 @@ print_sched_statistics(void)
 set_sched_tickets(int t)
 {
 
-	if (t > stride1) {
-		printf("the number of tickets cannot exceed %d!", stride1);
+	if (t > 10000) {
+		printf("the number of tickets cannot exceed 10000!");
 		return;
 	}
 
