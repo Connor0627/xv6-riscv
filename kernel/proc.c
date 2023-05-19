@@ -500,16 +500,13 @@ scheduler(void)
 #elif defined(STRIDE)
 		int min_pass = __INT_MAX__;
 		struct proc *last_proc =  0;
-		for (p = proc; p < &proc[NPROC]; p++) {
-			acquire(&p->lock);
+		for (p = proc; p < &proc[NPROC]; p++) 
 			if (p->state == RUNNABLE) {
 				if (min_pass > p->pass) {
 					min_pass = p->pass;
 					last_proc = p;
 				}
 			}
-			release(&p->lock);
-		}
 		if (last_proc != 0) {
 			acquire(&last_proc->lock);
 			last_proc->state = RUNNING;
