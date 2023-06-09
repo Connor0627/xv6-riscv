@@ -145,7 +145,10 @@ found:
 	p->ticks = 0;
 	p->stride = 10;
 	p->pass = 0;
-	p->tid = alloctid();
+	if(!isthread)
+		p->tid = 0;
+	else
+		p->tid = alloctid();
 	if((p->trapframe = (struct trapframe *)kalloc()) == 0){
 		freeproc(p);
 		release(&p->lock);
@@ -860,14 +863,8 @@ clone(void *stack)
 		return -1;
 	}
 
-	// Copy user memory from parent to child.
-	if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
-		freeproc(np);
-		release(&np->lock);
-		return -1;
-	}
+	np->pagetable = p->pagetable;
 	np->sz = p->sz;
-
 	// map the trapframe page just below the trampoline page, for
 	// trampoline.S.
 	if(mappages(np->pagetable, TRAPFRAME - (PGSIZE * np->tid), PGSIZE,
@@ -882,6 +879,7 @@ clone(void *stack)
 
 	// Cause clone to return 0 in the child.
 	np->trapframe->a0 = 0;
+	np->trapframe->sp = (uint64)(stack + PGSIZE * sizeof(void));
 	
 	// increment reference counts on open file descriptors.
 	for(i = 0; i < NOFILE; i++)
