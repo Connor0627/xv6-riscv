@@ -136,9 +136,6 @@ allocproc(int isthread)
 			release(&p->lock);
 		}
 	}
-
-	// p->syscall_count = 0; // Initialize syscall_count to 0
-
 	return 0;
 
 found:
@@ -380,11 +377,13 @@ exit(int status)
 		panic("init exiting");
 
 	// Close all open files.
-	for(int fd = 0; fd < NOFILE; fd++){
-		if(p->ofile[fd]){
-			struct file *f = p->ofile[fd];
-			fileclose(f);
-			p->ofile[fd] = 0;
+	if(p->tid == 0) { 
+		for(int fd = 0; fd < NOFILE; fd++){
+			if(p->ofile[fd]){
+				struct file *f = p->ofile[fd];
+				fileclose(f);
+				p->ofile[fd] = 0;
+			}
 		}
 	}
 
@@ -396,7 +395,10 @@ exit(int status)
 	acquire(&wait_lock);
 
 	// Give any children to init.
-	reparent(p);
+	if (p->tid == 0)
+	{
+		reparent(p);
+	}
 
 	// Parent might be sleeping in wait().
 	wakeup(p->parent);
