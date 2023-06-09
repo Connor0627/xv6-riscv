@@ -20,7 +20,8 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
-#define SYS_sysinfo   22        //lab1
-#define SYS_procinfo  23        //lab1
-#define SYS_sched_statistics 24 //lab2
-#define SYS_sched_tickets  25   //lab2
+#define SYS_sysinfo   22        // lab1
+#define SYS_procinfo  23        // lab1
+#define SYS_sched_statistics 24 // lab2
+#define SYS_sched_tickets  25   // lab2
+#define SYS_clone  26           // lab3

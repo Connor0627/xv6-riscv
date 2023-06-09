@@ -96,6 +96,7 @@ struct proc {
   int ticks;                   // number of times it has been scheduled to run
   int stride;                  
   int pass;                    // the length strided by the proc
+  int tid;                     // Thread ID
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 

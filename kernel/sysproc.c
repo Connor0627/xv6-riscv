@@ -122,3 +122,11 @@ sys_sched_tickets(void)
   set_sched_tickets(n);
   return 0;
 }
+
+uint64
+sys_clone(void)
+{
+  uint64 p;
+  argaddr(0, &p);
+  return clone((void *)p);
+}

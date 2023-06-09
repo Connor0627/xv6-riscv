@@ -13,8 +13,10 @@ struct proc proc[NPROC];
 struct proc *initproc;
 
 int nextpid = 1;
-int syscall_counter = 0;
+int nexttid = 1;
 struct spinlock pid_lock;
+struct spinlock tid_lock;
+int syscall_counter = 0;
 int stride1 = 10000;
 
 extern void forkret(void);
@@ -51,9 +53,9 @@ proc_mapstacks(pagetable_t kpgtbl)
 procinit(void)
 {
 	struct proc *p;
-
 	initlock(&pid_lock, "nextpid");
 	initlock(&wait_lock, "wait_lock");
+	initlock(&tid_lock, "nexttid");
 	for(p = proc; p < &proc[NPROC]; p++) {
 		initlock(&p->lock, "proc");
 		p->state = UNUSED;
@@ -101,8 +103,20 @@ allocpid()
 	pid = nextpid;
 	nextpid = nextpid + 1;
 	release(&pid_lock);
-
 	return pid;
+}
+
+	int
+alloctid()
+{
+	int tid;
+
+	acquire(&tid_lock);
+	tid = nexttid;
+	nexttid = nexttid + 1;
+	release(&tid_lock);
+
+	return tid;
 }
 
 // Look in the process table for an UNUSED proc.
@@ -110,12 +124,9 @@ allocpid()
 // and return with p->lock held.
 // If there are no free procs, or a memory allocation fails, return 0.
 	static struct proc*
-allocproc(void)
+allocproc(int isthread)
 {
 	struct proc *p;
-
-
-
 	for(p = proc; p < &proc[NPROC]; p++) {
 		acquire(&p->lock);
 		p->syscall_count = 0;
@@ -137,20 +148,22 @@ found:
 	p->ticks = 0;
 	p->stride = 10;
 	p->pass = 0;
+	p->tid = alloctid();
 	if((p->trapframe = (struct trapframe *)kalloc()) == 0){
 		freeproc(p);
 		release(&p->lock);
 		return 0;
 	}
 
-	// An empty user page table.
-	p->pagetable = proc_pagetable(p);
-	if(p->pagetable == 0){
-		freeproc(p);
-		release(&p->lock);
-		return 0;
+	if (!isthread) {
+		// An empty user page table.
+		p->pagetable = proc_pagetable(p);
+		if(p->pagetable == 0){
+			freeproc(p);
+			release(&p->lock);
+			return 0;
+		}
 	}
-
 	// Set up new context to start executing at forkret,
 	// which returns to user space.
 	memset(&p->context, 0, sizeof(p->context));
@@ -169,8 +182,12 @@ freeproc(struct proc *p)
 	if(p->trapframe)
 		kfree((void*)p->trapframe);
 	p->trapframe = 0;
-	if(p->pagetable)
-		proc_freepagetable(p->pagetable, p->sz);
+	if(p->pagetable) {
+		if(p->tid)
+			uvmunmap(p->pagetable, TRAPFRAME - PGSIZE * (p->tid), 1, 0);
+		else
+			proc_freepagetable(p->pagetable, p->sz);
+	}
 	p->pagetable = 0;
 	p->sz = 0;
 	p->pid = 0;
@@ -180,6 +197,7 @@ freeproc(struct proc *p)
 	p->killed = 0;
 	p->xstate = 0;
 	p->state = UNUSED;
+	p->tid = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -245,7 +263,7 @@ userinit(void)
 {
 	struct proc *p;
 
-	p = allocproc();
+	p = allocproc(0);
 	initproc = p;
 
 	// allocate one user page and copy initcode's instructions
@@ -293,9 +311,8 @@ fork(void)
 	int i, pid;
 	struct proc *np;
 	struct proc *p = myproc();
-
 	// Allocate process.
-	if((np = allocproc()) == 0){
+	if((np = allocproc(0)) == 0){
 		return -1;
 	}
 
@@ -797,6 +814,7 @@ update_procinfo(struct pinfo* in){
 
 	return 0;
 }
+
 	void
 print_sched_statistics(void)
 {
@@ -809,6 +827,7 @@ print_sched_statistics(void)
 	// printf("system call sched_statistics!");
 	return;
 }
+
 	void
 set_sched_tickets(int t)
 {
@@ -825,4 +844,62 @@ set_sched_tickets(int t)
 	curproc->pass = curproc->stride;
 	// printf("\nsystem call sched_tickets %d!\n", n);
 	return;
+}
+
+	int
+clone(void *stack)
+{
+	int i, tid;
+	struct proc *np;
+	struct proc *p = myproc();
+
+	// Allocate process, check if the thread index is greater than 20 and if stack is NULL
+	if((np = allocproc(1)) == 0 || p->tid > 20 || !stack){
+		return -1;
+	}
+
+	// Copy user memory from parent to child.
+	if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+		freeproc(np);
+		release(&np->lock);
+		return -1;
+	}
+	np->sz = p->sz;
+
+	// map the trapframe page just below the trampoline page, for
+	// trampoline.S.
+	if(mappages(np->pagetable, TRAPFRAME - (PGSIZE * np->tid), PGSIZE,
+				(uint64)(np->trapframe), PTE_R | PTE_W) < 0){
+		uvmunmap(np->pagetable, TRAMPOLINE, 1, 0);
+		uvmfree(np->pagetable, 0);
+		return 0;
+	}
+
+	// copy saved user registers.
+	*(np->trapframe) = *(p->trapframe);
+
+	// Cause clone to return 0 in the child.
+	np->trapframe->a0 = 0;
+	
+	// increment reference counts on open file descriptors.
+	for(i = 0; i < NOFILE; i++)
+		if(p->ofile[i])
+			np->ofile[i] = filedup(p->ofile[i]);
+	np->cwd = idup(p->cwd);
+
+	safestrcpy(np->name, p->name, sizeof(p->name));
+
+	tid = np->tid;
+
+	release(&np->lock);
+
+	acquire(&wait_lock);
+	np->parent = p;
+	release(&wait_lock);
+
+	acquire(&np->lock);
+	np->state = RUNNABLE;
+	release(&np->lock);
+
+	return tid;
 }
