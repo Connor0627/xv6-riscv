@@ -11,14 +11,14 @@ thread_create(void *(start_routine)(void*), void *arg)
      // Allocate user stack
     void *stack = (void*)malloc(PGSIZE);
     if (!stack) {
-        printf("Failed to allocate user stack");
+        //printf("Failed to allocate user stack");
         return -1;
     }
 
     // Create child thread
     int tid = clone(stack);
     if (tid < 0 || tid > 20) {
-        printf("Failed to create child thread");
+        //printf("Failed to create child thread");
         free(stack);
         return -1;
     }

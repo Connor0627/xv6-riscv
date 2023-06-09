@@ -380,13 +380,11 @@ exit(int status)
 		panic("init exiting");
 
 	// Close all open files.
-	if(p->tid == 0) { 
-		for(int fd = 0; fd < NOFILE; fd++){
-			if(p->ofile[fd]){
-				struct file *f = p->ofile[fd];
-				fileclose(f);
-				p->ofile[fd] = 0;
-			}
+	for(int fd = 0; fd < NOFILE; fd++){
+		if(p->ofile[fd]){
+			struct file *f = p->ofile[fd];
+			fileclose(f);
+			p->ofile[fd] = 0;
 		}
 	}
 
@@ -398,10 +396,7 @@ exit(int status)
 	acquire(&wait_lock);
 
 	// Give any children to init.
-	if (p->tid == 0)
-	{
-		reparent(p);
-	}
+	reparent(p);
 
 	// Parent might be sleeping in wait().
 	wakeup(p->parent);
